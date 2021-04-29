@@ -3,5 +3,5 @@ using Revise
 using SIAC_filter
 
 
-test_p1_kernel()
-test_p2_kernel()
+test_kernel(1,true)
+test_kernel(2,true)

@@ -3,16 +3,13 @@ push!(LOAD_PATH, ".")
 module SIAC_filter
 
 using Revise
-using GaussQuadrature, Polynomials,SpecialPolynomials, PyCall, PyPlot
+using GaussQuadrature, Polynomials,SpecialPolynomials, PyCall, PyPlot, Printf, LinearAlgebra
 const SP = SpecialPolynomials
 
 using BSplines: BSplineBasis,splinevalue
-
-using Einsum, LinearAlgebra
-
 pygui()
 
-export test_p1_kernel, test_p2_kernel, symmetric_pp, set_kernel
+export test_kernel, symmetric_pp, set_kernel
 
 mutable struct kernel
     l       :: Int
@@ -48,7 +45,7 @@ function map_std_coordinates(h,z)
     return vcat([0.5*( (h[j+1]-h[j]).*z.+(h[j+1]+h[j])) for j = 1:length(h)-1]...)
 end
 
-function plot_kernel(ker)
+function plot_kernel(ker,fig=1)
     z,_ = legendre(20)
     # Define B-spline breaks for a B-spline of order l
     x  = map_std_coordinates(ker.breaks, z)
@@ -56,11 +53,16 @@ function plot_kernel(ker)
     bs = [splinevalue(ker.splines[m], x[j]) for m = ker.l:ker.l+ker.r-1, j = 1:lx]
 
     kerval = [sum(bs[:,j].*ker.c_g) for j = 1:lx]
+
+    fig = figure(num=fig)
     for j in 1:length(bs[:,1])
-        plot(x,bs[j,:], c ="r", ls = "-")
+        piv = findall(y->abs(y) > 0.0,bs[j,:])
+        plot(x[piv],bs[j,piv], c ="r", ls = "-")
     end
     plot(x,kerval,  c ="black", ls = "--")
-
+    plot(block=false)
+    sleep(2)
+    close()
     return nothing
 end
 
@@ -100,6 +102,17 @@ function integral_ab(ahat,bhat,p,kwide,pwide,ker,kk,centre)
 
     # Obtain the integral value
     return vec(0.5 *(bhat-ahat) .* [sum(fker.* PLeg[m].*w) for m = 1:p+1])
+end
+
+function exact_convolution(p, zEval)
+    if p == 1
+        return exactp1convcoeff(zEval)
+    elseif p == 2
+        return exactp2convcoeff(zEval)
+    else
+        print("\n ONLY p = 1,2, exact convolutions available!!!!\n")
+        return nothing
+    end
 end
 
 function exactp1convcoeff(zEval)
@@ -315,16 +328,17 @@ function dg_breaks_equal_bsbreaks(p,kwide,pwide,L,z,w,ker,zEvalj)
     return xintsum
 end
 
-function test_p1_kernel()
+function test_kernel(p,plotker = false)
     zw = legendre(2)
-    l = 2
-    p = 1
-    m = 1
+    l = p+1
+    m = p
     ker   = set_kernel(l,m)
     conv1 = symmetric_pp(p,ker,zw[1])
-    conv2 = exactp1convcoeff(zw[1])
-    print("\n\n CONVOLUTION p1 ---> ERROR BETWEEN EXACT AND COMPUTED ", sum(abs.(conv1 .- conv2)),"\n")
-    plot_kernel(ker)
+    conv2 = exact_convolution(p,zw[1])
+    print("\n\n ERROR BETWEEN EXACT AND COMPUTED CONVOLUTION FOR P",p," = ",sum(abs.(conv1 .- conv2)),"\n")
+    if plotker
+        plot_kernel(ker, p)
+    end
 end
 
 function test_p2_kernel()
